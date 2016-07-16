@@ -25,11 +25,16 @@
 #define FLORIDA_PORT 8080
 #endif
 
+#ifndef FLORIDA_DNS
+#define FLORIDA_DNS "localhost"
+#endif
+
 #ifndef FLORIDA_REQUEST
 #define FLORIDA_REQUEST "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
 #endif
 
 static char * floridaIp   = NULL;
+static char * floridaDns  = NULL;
 static int    floridaPort = NULL;
 static char * request     = NULL;
 static int  isOsVarEval   = 0;
@@ -44,6 +49,7 @@ static void evalOSVar(){
   if (isOsVarEval==0){
      request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST")    : FLORIDA_REQUEST;
      floridaPort = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL)    ? atoi(getenv("DYNOMITE_FLORIDA_PORT")) : FLORIDA_PORT;
+     floridaDns  = (getenv("DYNOMITE_FLORIDA_DNS")!=NULL)     ? getenv("DYNOMITE_FLORIDA_DNS")        : FLORIDA_DNS;
      floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")         : FLORIDA_IP;
      isOsVarEval = 1;
   }
@@ -55,7 +61,7 @@ static bool seeds_check()
 
     int64_t delta = (int64_t)(now - last);
     log_debug(LOG_VERB, "Delta or elapsed time : %lu", delta);
-    log_debug(LOG_VERB, "Seeds check internal %d", SEEDS_CHECK_INTERVAL);
+    log_debug(LOG_VERB, "Seeds check interval %d", SEEDS_CHECK_INTERVAL);
 
     if (delta > SEEDS_CHECK_INTERVAL) {
         last = now;
@@ -113,7 +119,7 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
     remote->sin_port = htons(floridaPort);
 
     if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
-        log_debug(LOG_VVERB, "Unable to connect the destination");
+        log_debug(LOG_VVERB, "Unable to connect the destination: " + remote->sin_addr.s_addr);
         return DN_ERROR;
     }
 
