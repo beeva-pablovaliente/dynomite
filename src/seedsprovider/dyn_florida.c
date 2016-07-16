@@ -97,6 +97,7 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
     evalOSVar();
 
     struct sockaddr_in *remote;
+    struct hostent* pHostInfo;
     uint32_t sock;
     uint32_t tmpres;
     uint8_t buf[BUFSIZ + 1];
@@ -113,13 +114,30 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
         return DN_ERROR;
     }
 
+    char * address = floridaIp;
+
+    /* get IP address from name */
+    log_debug(LOG_VVERB, "Getting ip from host: %s", floridaDns);
+    pHostInfo=gethostbyname(floridaDns);
+
+    if(!pHostInfo){
+        log_debug(LOG_VVERB, "Could not get ip from host");
+    }
+    else{
+        struct in_addr **addr_list;
+        addr_list = (struct in_addr **)pHostInfo->h_addr_list;
+        address = inet_ntoa(*addr_list[0]);
+        log_debug(LOG_VVERB, "Ip Get It s: %s", address);
+
+    }
+
     remote = (struct sockaddr_in *) dn_alloc(sizeof(struct sockaddr_in *));
     remote->sin_family = AF_INET;
-    tmpres = inet_pton(AF_INET, floridaIp, (void *)(&(remote->sin_addr.s_addr)));
+    tmpres = inet_pton(AF_INET, address, (void *)(&(remote->sin_addr.s_addr)));
     remote->sin_port = htons(floridaPort);
 
     if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
-        log_debug(LOG_VVERB, "Unable to connect the destination: " + remote->sin_addr.s_addr);
+        log_debug(LOG_VVERB, "Unable to connect the destination: %s", floridaIp);
         return DN_ERROR;
     }
 
