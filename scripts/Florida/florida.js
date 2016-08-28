@@ -29,7 +29,7 @@ http.createServer(function(req, res) {
         // Otherwise, should be configured properly locally (http://docs.aws.amazon.com/AWSJavaScriptSDK/guide/node-configuring.html)
         AWS.config.update({
             region: 'eu-west-1'
-        );
+        });
 
         // Seed file retrieved from S3
         var s3 = new AWS.S3();
