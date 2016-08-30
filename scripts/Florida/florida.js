@@ -39,20 +39,50 @@ http.createServer(function(req, res) {
           ResponseContentType: 'text/plain'
         };
 
-        s3.getObject(params, function(err, data) {
-          if (err) {
-            console.log(err, err.stack);
-          } else {
-            console.log(data.Body.toString('utf-8'));
-            var fileContent = data.Body.toString('utf-8');
+        // Determining current IP through instance metadata (if available)
+        var ownIp;
+        var metadata = new AWS.MetadataService();
+        metadata.request("/latest/meta-data/public-ipv4", function(err, data){
+            if (err) {
+                console.log("Could not retrieve instance's public IP, seeds will not be filtered");
+            }
 
-            var now = (new Date()).toJSON();
-            var seeds = fileContent.trim().replace(/\n/g, '|');
+            if (data) {
+                ownIp = data;
+                console.log("Obtained instance's public IP :" + ownIp);
+            };
 
-            enableDebug && console.log(now + ' - get_seeds [' + seeds + ']');
-            res.write(seeds);
-            res.end();
-          }
+            // Retrieve and process seeds file from S3
+            s3.getObject(params, function(err, data) {
+              if (err) {
+                console.log(err, err.stack);
+              } else {
+                console.log(data.Body.toString('utf-8'));
+                var fileContent = data.Body.toString('utf-8');
+                var now = (new Date()).toJSON();
+
+                if (ownIp) {
+                    // Processing of file content removing seed with own IP
+                    var seedsRawArray = fileContent.trim().split("\n");
+                    var seedsFilteredArray = [];
+                    for (var index in seedsRawArray) {
+                        if (seedsRawArray[index].indexOf(ownIp) < 0) {
+                            seedsFilteredArray.push(seedsRawArray[index]);
+                        } else {
+                            console.log("Filtered seed : " + seedsRawArray[index]);
+                        }
+                    }
+
+                    var seeds = seedsFilteredArray.join("|");
+                } else {
+                    var seeds = data.trim().replace(/\n/g, '|');
+                }
+
+                enableDebug && console.log(now + ' - get_seeds [' + seeds + ']');
+                res.write(seeds);
+                res.end();
+              }
+            });
         });
     } else {
         fs.readFile(seedsFilePath, 'utf-8', function(err, data) {
