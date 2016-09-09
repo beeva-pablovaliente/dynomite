@@ -21,14 +21,14 @@ http.createServer(function(req, res) {
 
   res.writeHead(200, {'Content-Type': 'application/json'});
   if (path === apiUrl) {
-    if (process.env.DYNOMITE_S3_SEED_FILE) {
-        console.log("Retrieving seed file from S3");
-
         // We assume that credentials are available through IAM Role
         // Otherwise, should be configured properly locally (http://docs.aws.amazon.com/AWSJavaScriptSDK/guide/node-configuring.html)
         AWS.config.update({
             region: 'eu-west-1'
         });
+
+    if (process.env.DYNOMITE_S3_SEED_FILE) {
+        console.log("Retrieving seed file from S3");
 
         // Seed file retrieved from S3
         var s3 = new AWS.S3();
@@ -84,6 +84,66 @@ http.createServer(function(req, res) {
               }
             });
         });
+    } else if (process.env.DYNOMITE_DDB_SEEDS) {
+        console.log("Retrieving seed file from DynamoDB");
+
+        var dynamodb = new AWS.DynamoDB();
+        var params = {
+          Key: {
+            type: {
+              S: 'default'
+            }
+          },
+          TableName: 'poc-dynomite',
+          ConsistentRead: true,
+          ProjectionExpression: 'nodes'
+        };
+
+        // Determining current IP through instance metadata (if available)
+        var ownIp;
+        var metadata = new AWS.MetadataService();
+        metadata.request("/latest/meta-data/public-ipv4", function(err, data){
+            if (err) {
+                console.log("Could not retrieve instance's public IP, seeds will not be filtered");
+            }
+
+            if (data) {
+                ownIp = data;
+                console.log("Obtained instance's public IP :" + ownIp);
+            };
+
+            // Retrieve and process seeds file from DynamoDB
+            dynamodb.getItem(params, function(err, data) {
+                console.log(data.Item.nodes.S);
+                if (err) {
+                    console.log(err, err.stack);
+                } else {
+                    var rawNodes = data.Item.nodes.S.toString('utf-8');
+                    var now = (new Date()).toJSON();
+
+                    if (ownIp) {
+                        // Processing of file content removing seed with own IP
+                        var seedsRawArray = rawNodes.trim().split("|");
+                        var seedsFilteredArray = [];
+                        for (var index in seedsRawArray) {
+                            if (seedsRawArray[index].indexOf(ownIp) < 0) {
+                                seedsFilteredArray.push(seedsRawArray[index]);
+                            } else {
+                                console.log("Filtered seed : " + seedsRawArray[index]);
+                            }
+                        }
+
+                        var seeds = seedsFilteredArray.join("|");
+                    } else {
+                        var seeds = data.trim();
+                    }
+
+                    console.log(now + ' - Retrieved seeds : [' + seeds + ']');
+                    res.write(seeds);
+                    res.end();
+              }
+            });
+      });
     } else {
         fs.readFile(seedsFilePath, 'utf-8', function(err, data) {
           if (err) console.log(err);
